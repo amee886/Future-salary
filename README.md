@@ -3,9 +3,44 @@
 HeadHunter(hh.ru) - через публичное API
 Superjob - через API с использованием ключа доступа
 В результате программа выводит таблицы со средней зарплатой по каждому языку программирования в Москве.
-**Установка
-**Клонировать репозиторий**
+
+##Установка
+
+1. **Клонировать репозиторий**
 ```bash
-git clone [<your_repository_url](https://github.com/amee886/Future-salary)>
-cd Future-salary
+git clone https://github.com/amee886/Future-salary.git cd Future-salary
 ```
+
+2. **Установите зависимости
+ ```bash
+   python -m pip install -r requirements.txt
+```
+
+3.**Получите API-ключ SuperJob**
+1. Зарегистрироваться на сайте SuperJob
+2. Получить APi=ключ
+3. Создать файл .env в корневом каталоге проекта и добавьте туда ваш токен:
+
+API_KEY=ваш_ключ_superjob
+
+4. **Запустите программу**
+
+```bash
+python table.py
+```
+
+## Функции
+
+predict_hh_salary(vacancy: dict)-Рассчитывает предполагаемую зарплату для вакансии с HH.
+
+get_hh_language_stats(lang: str)-Получает общее количество найденных вакансий, количество обработанных вакансий,среднюю зарплату
+
+predict_sj_salary(vacancy: dict)-Рассчитывает зарплату для вакансии с SuperJob.
+
+get_sj_keyword_stats(keyword: str, town: int = 4)-Получает статистику по ключевому слову (по умолчанию — Москва).
+
+print_hh_table()-Выводит таблицу по данным HH.
+
+print_superjob_table()-Выводит таблицу по данным SuperJob.
+
+main()-Запускает вывод обеих таблиц.
