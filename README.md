@@ -31,16 +31,16 @@ python table.py
 
 ## Функции
 
-predict_hh_salary(vacancy: dict)-Рассчитывает предполагаемую зарплату для вакансии с HH.
+**predict_hh_salary(vacancy: dict)**-Рассчитывает предполагаемую зарплату для вакансии с HH.
 
-get_hh_language_stats(lang: str)-Получает общее количество найденных вакансий, количество обработанных вакансий,среднюю зарплату
+**get_hh_language_stats(lang: str)**-Получает общее количество найденных вакансий, количество обработанных вакансий,среднюю зарплату
 
-predict_sj_salary(vacancy: dict)-Рассчитывает зарплату для вакансии с SuperJob.
+**predict_sj_salary(vacancy: dict)**-Рассчитывает зарплату для вакансии с SuperJob.
 
-get_sj_keyword_stats(keyword: str, town: int = 4)-Получает статистику по ключевому слову (по умолчанию — Москва).
+**get_sj_keyword_stats(keyword: str, town: int = 4)**-Получает статистику по ключевому слову (по умолчанию — Москва).
 
-print_hh_table()-Выводит таблицу по данным HH.
+**print_hh_table()**-Выводит таблицу по данным HH.
 
-print_superjob_table()-Выводит таблицу по данным SuperJob.
+**print_superjob_table()**-Выводит таблицу по данным SuperJob.
 
-main()-Запускает вывод обеих таблиц.
+**main()**-Запускает вывод обеих таблиц.
