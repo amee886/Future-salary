@@ -14,7 +14,6 @@ LANGUAGES = [
     "Ruby",
 ]
 
-MAX_VACANCIES_TO_PROCESS = 1000
 PER_PAGE = 100
 
 TABLE_HEADER = [
@@ -28,43 +27,69 @@ TABLE_HEADER = [
 HH_URL = "https://api.hh.ru/vacancies"
 
 
-def predict_hh_salary(vacancy: dict):
-    salary = vacancy.get("salary")
+SJ_API_KEY = config("API_KEY")
+SJ_URL = "https://api.superjob.ru/2.0/vacancies/"
 
-    if not salary:
-        return None
+SJ_HEADERS = {
+    "X-Api-App-Id": SJ_API_KEY,
+}
 
-    if salary.get("currency") != "RUR":
-        return None
+def calculate_average_salary(salaries: list) -> int:
+    """Вычисляет среднюю зарплату по списку. Возвращает 0 для пустого списка."""
+    return int(sum(salaries) / len(salaries)) if salaries else 0
 
-    salary_from = salary.get("from")
-    salary_to = salary.get("to")
 
-    if salary_from is not None and salary_to is not None:
+def predict_salary(vacancy: dict):
+    """Предсказывает зарплату по вакансии HeadHunter или SuperJob."""
+    salary_from = salary_to = currency = None
+
+    if "salary" in vacancy:
+        salary = vacancy["salary"]
+        if not salary:
+            return
+        currency = salary.get("currency")
+        salary_from = salary.get("from")
+        salary_to = salary.get("to")
+    else:
+        currency = vacancy.get("currency")
+        salary_from = vacancy.get("payment_from")
+        salary_to = vacancy.get("payment_to")
+
+    if currency and currency.upper() not in ("RUB", "RUR"):
+        return
+
+    if salary_from and salary_to:
         return (salary_from + salary_to) / 2
-    elif salary_from is not None:
+    if salary_from:
         return salary_from * 1.2
-    elif salary_to is not None:
+    if salary_to:
         return salary_to * 0.8
 
-    return None
 
-
-def get_hh_language_stats(lang: str) -> dict:
+def get_hh_language_stats(lang: str, area: int = 1) -> dict:
     salaries = []
-    vacancies_processed = 0
     page = 0
     vacancies_found = 0
 
-    while vacancies_processed < MAX_VACANCIES_TO_PROCESS:
+    while True:
         params = {
             "text": lang,
             "per_page": PER_PAGE,
             "page": page,
-            "area": 1,
+            "area": area,
         }
         response = requests.get(HH_URL, params=params)
-        response.raise_for_status()
+
+        if not response.ok:
+            try:
+                error_body = response.json() if response.text else {}
+            except Exception:
+                response.raise_for_status()
+            bad_args = str(error_body.get("bad_arguments", "")) + str(error_body.get("bad_argument", ""))
+            if "page" in bad_args.lower() or "per_page" in bad_args.lower():
+                break
+            response.raise_for_status()
+
         data = response.json()
 
         if page == 0:
@@ -75,77 +100,52 @@ def get_hh_language_stats(lang: str) -> dict:
             break
 
         for vacancy in items:
-            if vacancies_processed >= MAX_VACANCIES_TO_PROCESS:
-                break
-            salary = predict_hh_salary(vacancy)
-            if salary is not None:
+            salary = predict_salary(vacancy)
+            if salary:
                 salaries.append(salary)
-            vacancies_processed += 1
 
         if len(items) < PER_PAGE:
             break
         page += 1
 
-    average_salary = int(sum(salaries) / len(salaries)) if salaries else 0
-
     return {
         "vacancies_found": vacancies_found,
-        "vacancies_processed": vacancies_processed,
-        "average_salary": average_salary,
+        "vacancies_processed": len(salaries),
+        "average_salary": calculate_average_salary(salaries),
     }
 
 
-def print_hh_table():
-    table_data = [TABLE_HEADER]
+def build_stats_table_rows(get_stats_func, languages=LANGUAGES) -> list:
+    """Собирает строки таблицы статистики по языкам."""
+    rows = [TABLE_HEADER]
+    for lang in languages:
+        stats = get_stats_func(lang)
+        rows.append([
+            lang,
+            stats["vacancies_found"],
+            stats["vacancies_processed"],
+            stats["average_salary"],
+        ])
+    return rows
 
-    for lang in LANGUAGES:
-        stats = get_hh_language_stats(lang)
-        table_data.append(
-            [
-                lang,
-                stats["vacancies_found"],
-                stats["vacancies_processed"],
-                stats["average_salary"],
-            ]
-        )
 
-    table = AsciiTable(table_data, "HeadHunter Moscow")
+def print_stats_table(title: str, table_data: list) -> None:
+    """Выводит таблицу в консоль."""
+    table = AsciiTable(table_data, title)
     print(table.table)
 
 
-SJ_API_KEY = config("API_KEY")
-SJ_URL = "https://api.superjob.ru/2.0/vacancies/"
-
-SJ_HEADERS = {
-    "X-Api-App-Id": SJ_API_KEY,
-}
-
-
-def predict_sj_salary(vacancy: dict):
-    currency = vacancy.get("currency")
-    payment_from = vacancy.get("payment_from")
-    payment_to = vacancy.get("payment_to")
-
-    if currency and currency.upper() not in ("RUB", "RUR"):
-        return None
-
-    if payment_from and payment_to:
-        return (payment_from + payment_to) / 2
-    elif payment_from:
-        return payment_from * 1.2
-    elif payment_to:
-        return payment_to * 0.8
-
-    return None
+def print_hh_table():
+    table_data = build_stats_table_rows(get_hh_language_stats)
+    print_stats_table("HeadHunter Moscow", table_data)
 
 
 def get_sj_keyword_stats(keyword: str, town: int = 4) -> dict:
     salaries = []
-    vacancies_processed = 0
     page = 0
     vacancies_found = 0
 
-    while vacancies_processed < MAX_VACANCIES_TO_PROCESS:
+    while True:
         params = {
             "count": PER_PAGE,
             "page": page,
@@ -164,42 +164,24 @@ def get_sj_keyword_stats(keyword: str, town: int = 4) -> dict:
             break
 
         for vacancy in objects:
-            if vacancies_processed >= MAX_VACANCIES_TO_PROCESS:
-                break
-            salary = predict_sj_salary(vacancy)
-            if salary is not None:
+            salary = predict_salary(vacancy)
+            if salary:
                 salaries.append(salary)
-            vacancies_processed += 1
 
         if len(objects) < PER_PAGE:
             break
         page += 1
 
-    average_salary = int(sum(salaries) / len(salaries)) if salaries else 0
-
     return {
         "vacancies_found": vacancies_found,
-        "vacancies_processed": vacancies_processed,
-        "average_salary": average_salary,
+        "vacancies_processed": len(salaries),
+        "average_salary": calculate_average_salary(salaries),
     }
 
 
 def print_superjob_table():
-    table_data = [TABLE_HEADER]
-
-    for lang in LANGUAGES:
-        stats = get_sj_keyword_stats(lang)
-        table_data.append(
-            [
-                lang,
-                stats["vacancies_found"],
-                stats["vacancies_processed"],
-                stats["average_salary"],
-            ]
-        )
-
-    table = AsciiTable(table_data, "SuperJob Moscow")
-    print(table.table)
+    table_data = build_stats_table_rows(get_sj_keyword_stats)
+    print_stats_table("SuperJob Moscow", table_data)
 
 
 def main():
