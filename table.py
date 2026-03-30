@@ -1,3 +1,4 @@
+import json
 import requests
 from decouple import config
 from terminaltables import AsciiTable
@@ -41,10 +42,9 @@ def calculate_average_salary(salaries: list) -> int:
 
 def predict_salary(vacancy: dict):
     """Предсказывает зарплату по вакансии HeadHunter или SuperJob."""
-    salary_from = salary_to = currency = None
+    salary = vacancy.get("salary")
 
-    if "salary" in vacancy:
-        salary = vacancy["salary"]
+    if salary is not None:
         if not salary:
             return
         currency = salary.get("currency")
@@ -83,7 +83,7 @@ def get_hh_language_stats(lang: str, area: int = 1) -> dict:
         if not response.ok:
             try:
                 error_body = response.json() if response.text else {}
-            except Exception:
+            except json.JSONDecodeError:
                 response.raise_for_status()
             bad_args = str(error_body.get("bad_arguments", "")) + str(error_body.get("bad_argument", ""))
             if "page" in bad_args.lower() or "per_page" in bad_args.lower():
@@ -115,29 +115,28 @@ def get_hh_language_stats(lang: str, area: int = 1) -> dict:
     }
 
 
-def build_stats_table_rows(get_stats_func, languages=LANGUAGES) -> list:
-    """Собирает строки таблицы статистики по языкам."""
-    rows = [TABLE_HEADER]
+def collect_stats(get_stats_func, languages=LANGUAGES):
+    """Собирает статистику по языкам, не строя таблицу."""
+    stats_by_language = []
     for lang in languages:
-        stats = get_stats_func(lang)
-        rows.append([
-            lang,
-            stats["vacancies_found"],
-            stats["vacancies_processed"],
-            stats["average_salary"],
-        ])
-    return rows
+        stats_by_language.append((lang, get_stats_func(lang)))
+    return stats_by_language
 
 
-def print_stats_table(title: str, table_data: list) -> None:
-    """Выводит таблицу в консоль."""
-    table = AsciiTable(table_data, title)
-    print(table.table)
+def build_stats_table_rows(stats_by_language, title: str) -> AsciiTable:
+    """Создаёт готовую AsciiTable по уже рассчитанной статистике."""
+    table_data = [TABLE_HEADER]
+    for lang, stats in stats_by_language:
+        table_data.append(
+            [
+                lang,
+                stats["vacancies_found"],
+                stats["vacancies_processed"],
+                stats["average_salary"],
+            ]
+        )
 
-
-def print_hh_table():
-    table_data = build_stats_table_rows(get_hh_language_stats)
-    print_stats_table("HeadHunter Moscow", table_data)
+    return AsciiTable(table_data, title)
 
 
 def get_sj_keyword_stats(keyword: str, town: int = 4) -> dict:
@@ -179,17 +178,17 @@ def get_sj_keyword_stats(keyword: str, town: int = 4) -> dict:
     }
 
 
-def print_superjob_table():
-    table_data = build_stats_table_rows(get_sj_keyword_stats)
-    print_stats_table("SuperJob Moscow", table_data)
-
-
 def main():
-    print_hh_table()
-    print() 
-    print_superjob_table()
+    hh_stats = collect_stats(get_hh_language_stats)
+    hh_table = build_stats_table_rows(hh_stats, "HeadHunter Moscow")
+    print(hh_table.table)
+
+    print()
+
+    sj_stats = collect_stats(get_sj_keyword_stats)
+    sj_table = build_stats_table_rows(sj_stats, "SuperJob Moscow")
+    print(sj_table.table)
 
 
 if __name__ == "__main__":
     main()
-
